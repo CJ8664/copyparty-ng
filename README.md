@@ -4,6 +4,8 @@ A sleek, responsive, and seamless Modern UI overhaul for [CopyParty](https://git
 
 **The architecture is non-intrusive**: It acts as a lightweight overlay over CopyParty's classic mode. If you prefer the original toolset or run into issues, you can instantly toggle back to the classic UI with a single click.
 
+![preview](https://github.com/dyal96/copyparty-ng/blob/main/morden%20ui.png)
+
 ---
 
 ## 🎨 Features (Current)
