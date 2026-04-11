@@ -1,4 +1,4 @@
-# CopyPartyMax (Modern UI)
+# CopyParty-NG (Modern UI)
 
 A sleek, responsive, and seamless Modern UI overhaul for [CopyParty](https://github.com/9001/copyparty). This application rebuilds the frontend experience, bringing modern design principles, beautiful animations, and advanced theming to the powerful CopyParty backend—without altering its core functionality.
 
