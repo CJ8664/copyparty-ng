@@ -904,6 +904,12 @@ html:not(.modern-active) #modern-app {
 }
 
 /* ===== 14. UPLOAD STATUS TOAST ===== */
+@keyframes m-pulse {
+  0% { box-shadow: 0 0 0 0 rgba(138, 180, 248, 0.4); }
+  70% { box-shadow: 0 0 0 10px rgba(138, 180, 248, 0); }
+  100% { box-shadow: 0 0 0 0 rgba(138, 180, 248, 0); }
+}
+
 .m-upload-toast {
   position: fixed;
   bottom: 24px;
@@ -1788,19 +1794,32 @@ html.modern-active ::-webkit-scrollbar-thumb:hover {
 }
 
 .m-file-card {
-  background: var(--m-surface);
+  background: var(--m-bg);
   border: 1px solid var(--m-border);
-  border-radius: var(--m-radius-lg);
+  border-radius: var(--m-radius);
   overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  transition: transform 0.2s, box-shadow 0.2s, border-color 0.2s;
   cursor: pointer;
-  transition: all 0.2s ease;
-  text-decoration: none;
-  color: inherit;
+  position: relative;
 }
+
 .m-file-card:hover {
-  box-shadow: var(--m-shadow-md);
-  border-color: var(--m-primary);
   transform: translateY(-2px);
+  box-shadow: var(--m-shadow-md);
+  border-color: var(--m-primary-light);
+}
+
+.m-file-card:focus, .m-file-row:focus {
+  outline: 2px solid var(--m-primary);
+  outline-offset: -2px;
+}
+
+.m-drag-over {
+  outline: 2px dashed var(--m-primary) !important;
+  outline-offset: -2px;
+  background-color: var(--m-primary-light) !important;
 }
 
 .m-file-card-thumb {
@@ -1889,4 +1908,275 @@ html.modern-active ::-webkit-scrollbar-thumb:hover {
 /* Remove old header inner overflow that clipped batch bar */
 .m-filelist-header-inner {
   position: relative;
+}
+
+/* ===== 21. APPLE-LIKE AUDIO DOCK ===== */
+.m-audio-dock {
+  position: fixed;
+  bottom: 24px;
+  left: 50%;
+  transform: translateX(-50%) translateY(150%);
+  background: rgba(var(--m-surface-rgb, 30, 30, 30), 0.7);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border: 1px solid var(--m-border);
+  border-radius: var(--m-radius-xl);
+  padding: 12px 24px;
+  display: flex;
+  align-items: center;
+  gap: 20px;
+  box-shadow: var(--m-shadow-lg);
+  z-index: 1200;
+  min-width: 400px;
+  transition: transform 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+}
+
+.modern-dark .m-audio-dock {
+  background: rgba(15, 15, 15, 0.7);
+}
+
+.m-audio-dock.active {
+  transform: translateX(-50%) translateY(0);
+}
+
+.m-audio-info {
+  display: flex;
+  flex-direction: column;
+  min-width: 150px;
+  max-width: 200px;
+}
+
+.m-audio-title {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--m-text);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.m-audio-artist {
+  font-size: 11px;
+  color: var(--m-text-secondary);
+}
+
+.m-audio-controls {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.m-audio-btn {
+  width: 32px;
+  height: 32px;
+  border-radius: var(--m-radius-full);
+  border: none;
+  background: none;
+  cursor: pointer;
+  color: var(--m-text);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background 0.2s, transform 0.1s;
+}
+
+.m-audio-btn:hover {
+  background: var(--m-surface-hover);
+}
+
+.m-audio-btn:active {
+  transform: scale(0.9);
+}
+
+.m-audio-btn.play-pause {
+  background: var(--m-primary);
+  color: var(--m-primary-text);
+}
+
+.m-audio-btn.play-pause:hover {
+  background: var(--m-primary-hover);
+}
+
+.m-audio-progress-container {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.m-audio-time {
+  font-size: 11px;
+  font-family: monospace;
+  color: var(--m-text-tertiary);
+  width: 40px;
+  text-align: center;
+}
+
+.m-audio-scrubber {
+  flex: 1;
+  height: 6px;
+  background: var(--m-border);
+  border-radius: 3px;
+  cursor: pointer;
+  position: relative;
+  overflow: hidden;
+}
+
+.m-audio-scrub-fill {
+  position: absolute;
+  top: 0;
+  left: 0;
+  bottom: 0;
+  background: var(--m-primary);
+  width: 0%;
+  pointer-events: none;
+}
+
+.m-audio-close {
+  background: none;
+  border: none;
+  color: var(--m-text-tertiary);
+  cursor: pointer;
+  margin-left: 10px;
+}
+.m-audio-close:hover {
+  color: var(--m-error);
+}
+
+/* ===== 22. TOOLTIPS ===== */
+[data-tooltip] {
+  position: relative;
+}
+
+[data-tooltip]::before {
+  content: attr(data-tooltip);
+  position: absolute;
+  bottom: 100%;
+  left: 50%;
+  transform: translateX(-50%) translateY(-4px);
+  background: var(--m-text);
+  color: var(--m-bg);
+  padding: 6px 10px;
+  border-radius: var(--m-radius);
+  font-size: 12px;
+  white-space: nowrap;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.2s, transform 0.2s;
+  z-index: 2000;
+  box-shadow: var(--m-shadow-md);
+  font-weight: 500;
+}
+
+[data-tooltip]:hover::before {
+  opacity: 1;
+  transform: translateX(-50%) translateY(-10px);
+}
+
+/* ===== 23. CONFIG BUILDER ===== */
+.m-config-modal .m-modal {
+  min-width: 700px;
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.m-cb-layout {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 24px;
+}
+
+.m-cb-section {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.m-cb-title {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--m-primary);
+  margin-bottom: 4px;
+}
+
+.m-cb-form-group {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.m-cb-form-group label {
+  font-size: 12px;
+  color: var(--m-text-secondary);
+}
+.m-cb-form-group input {
+  padding: 8px 12px;
+  border: 1px solid var(--m-border);
+  border-radius: var(--m-radius);
+  background: var(--m-bg);
+  color: var(--m-text);
+  font-family: inherit;
+  font-size: 13px;
+}
+input[type="checkbox"] {
+  accent-color: var(--m-primary);
+}
+.m-cb-output {
+  background: var(--m-bg);
+  border: 1px solid var(--m-border);
+  border-radius: var(--m-radius);
+  padding: 12px;
+  font-family: monospace;
+  font-size: 12px;
+  color: #1a73e8;
+  height: 100%;
+  min-height: 200px;
+  resize: none;
+  white-space: pre-wrap;
+}
+.modern-dark .m-cb-output {
+  color: #8ab4f8;
+}
+
+/* ===== 24. UNDO TOAST ===== */
+.m-undo-toast {
+  position: fixed;
+  bottom: -60px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: var(--m-text);
+  color: var(--m-bg);
+  padding: 12px 20px;
+  border-radius: var(--m-radius);
+  box-shadow: var(--m-shadow-lg);
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  transition: bottom 0.3s cubic-bezier(0.18, 0.89, 0.32, 1.28);
+  z-index: 9000;
+}
+
+.m-undo-toast.active {
+  bottom: 24px;
+}
+
+.m-undo-msg {
+  font-size: 14px;
+  font-weight: 500;
+}
+
+.m-undo-btn {
+  background: transparent;
+  border: none;
+  color: #8ab4f8;
+  font-weight: 600;
+  cursor: pointer;
+  padding: 4px 8px;
+  border-radius: 4px;
+  text-transform: uppercase;
+  font-size: 13px;
+}
+
+.m-undo-btn:hover {
+  background: rgba(138, 180, 248, 0.1);
 }

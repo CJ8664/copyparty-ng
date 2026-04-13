@@ -12,6 +12,7 @@
   var DARK_KEY = "cpp_modern_dark";
   var ACCENT_KEY = "cpp_modern_accent";
   var VIEW_KEY = "cpp_modern_view";
+  var draggedFile = null;
 
   // ===== ACCENT COLOR PRESETS =====
   var ACCENT_COLORS = [
@@ -59,6 +60,8 @@
       '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M10 6L8.59 7.41 13.17 12l-4.58 4.59L10 18l6-6z"/></svg>',
     switchUI:
       '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><line x1="3" y1="9" x2="21" y2="9"/><line x1="9" y1="21" x2="9" y2="9"/></svg>',
+    play: '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>',
+    pause: '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z"/></svg>',
     storage:
       '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M2 20h20v-4H2v4zm2-3h2v2H4v-2zM2 4v4h20V4H2zm4 3H4V5h2v2zm-4 7h20v-4H2v4zm2-3h2v2H4v-2z"/></svg>',
     check: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>',
@@ -421,6 +424,9 @@
     // Login modal
     app.appendChild(this.buildLoginModal());
 
+    // Config Builder modal
+    app.appendChild(this.buildConfigModal());
+
     document.body.appendChild(app);
   };
 
@@ -576,13 +582,13 @@
     var viewToggle = el("div", { className: "m-view-toggle" });
     var listBtn = el("button", {
       className: "m-view-toggle-btn" + (this.viewMode === "list" ? " active" : ""),
-      title: "List view",
+      "data-tooltip": "List view",
       innerHTML: SVG.listView,
       onclick: function () { self.setViewMode("list"); },
     });
     var gridBtn = el("button", {
       className: "m-view-toggle-btn" + (this.viewMode === "grid" ? " active" : ""),
-      title: "Grid view",
+      "data-tooltip": "Grid view",
       innerHTML: SVG.gridView,
       onclick: function () { self.setViewMode("grid"); },
     });
@@ -593,17 +599,26 @@
     // Dark mode toggle
     var darkBtn = el("button", {
       className: "m-header-btn",
-      title: "Toggle dark mode",
+      "data-tooltip": "Toggle dark mode",
       onclick: function () { self.toggleDarkMode(); },
       innerHTML: isDarkMode() ? SVG.lightMode : SVG.darkMode,
       id: "m-dark-toggle",
     });
     actions.appendChild(darkBtn);
 
+    // Help Button
+    var helpBtn = el("button", {
+      className: "m-header-btn",
+      "data-tooltip": "Help & Cheatsheet",
+      onclick: function () { window.open("/FEATURES_AND_CHEATSHEET.md", "_blank"); },
+      innerHTML: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 015.83 1c0 2-3 3-3 3"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>',
+    });
+    actions.appendChild(helpBtn);
+
     // Settings button - opens settings panel
     var settingsBtn = el("button", {
       className: "m-header-btn",
-      title: "Settings",
+      "data-tooltip": "Settings",
       onclick: function () { self.showSettings(); },
       innerHTML: SVG.settings,
     });
@@ -613,7 +628,7 @@
     var userChar = this.acct === "*" ? "?" : this.acct.charAt(0).toUpperCase();
     var avatar = el("div", {
       className: "m-user-avatar",
-      title: this.acct === "*" ? "Click to log in" : "Logged in as " + this.acct,
+      "data-tooltip": this.acct === "*" ? "Click to log in" : "Logged in as " + this.acct,
       textContent: userChar,
       onclick: function () {
         if (self.acct === "*") {
@@ -933,7 +948,9 @@
     for (var i = 0; i < this.data.files.length; i++) {
       var file = this.data.files[i];
       var ft = getFileType(file.ext);
-      var card = el("div", { className: "m-file-card" });
+      var card = el("div", { className: "m-file-card", tabIndex: "0", draggable: "true" });
+      file.el = card;
+      self.bindDragDrop(card, file);
 
       // Thumbnail area
       var thumb = el("div", { className: "m-file-card-thumb" });
@@ -959,7 +976,9 @@
 
       // Click handler
       (function(f) {
-        card.addEventListener("click", function () {
+        var actionFn = function(e) {
+          if (e.type === "keydown" && e.key === " ") { e.preventDefault(); self.toggleSelection(f.href); return; }
+          if (e.type === "keydown" && e.key !== "Enter") return;
           var ext = (f.ext || "").toLowerCase();
           if (isImageExt(ext)) {
             self.showPreview(f, "image");
@@ -970,7 +989,9 @@
           } else {
             window.location.href = f.href;
           }
-        });
+        };
+        card.addEventListener("click", actionFn);
+        card.addEventListener("keydown", actionFn);
         card.addEventListener("contextmenu", function (e) {
           e.preventDefault();
           self.showFileContextMenu(e, f);
@@ -982,10 +1003,57 @@
     return grid;
   };
 
+  ModernUI.prototype.bindDragDrop = function(element, file) {
+    var self = this;
+    var isFolder = !file.ext || file.href.endsWith('/');
+    
+    element.addEventListener("dragstart", function(e) {
+      draggedFile = file;
+      e.dataTransfer.setData("text/plain", file.name);
+      e.dataTransfer.effectAllowed = "move";
+      setTimeout(function() { element.style.opacity = '0.4'; }, 0);
+    });
+
+    element.addEventListener("dragend", function(e) {
+      element.style.opacity = '';
+      draggedFile = null;
+    });
+
+    if (isFolder) {
+      element.addEventListener("dragover", function(e) {
+        if (draggedFile && draggedFile !== file && draggedFile.href !== file.href) {
+          e.preventDefault(); 
+          element.classList.add("m-drag-over");
+        }
+      });
+      element.addEventListener("dragleave", function(e) {
+        element.classList.remove("m-drag-over");
+      });
+      element.addEventListener("drop", function(e) {
+        e.preventDefault();
+        element.classList.remove("m-drag-over");
+        if (draggedFile && draggedFile !== file && draggedFile.href !== file.href) {
+          var destPath = file.name.replace(/\/$/,'') + "/" + draggedFile.name; 
+          self.moveFile(draggedFile, destPath);
+        }
+      });
+    }
+  };
+
   ModernUI.prototype.buildFileRow = function (file) {
     var self = this;
     var ft = getFileType(file.ext);
-    var row = el("div", { className: "m-file-row" });
+    var row = el("div", { className: "m-file-row", tabIndex: "0", draggable: "true" });
+    file.el = row;
+    self.bindDragDrop(row, file);
+
+    row.addEventListener("keydown", function(e) {
+      if (e.key === " ") { e.preventDefault(); self.toggleSelection(file.href); }
+      else if (e.key === "Enter") {
+        var a = row.querySelector(".m-file-name-link");
+        if (a) a.click();
+      }
+    });
 
     // Checkbox
     var cbCell = el("div", { className: "m-checkbox-cell", "data-href": file.href });
@@ -1063,20 +1131,173 @@
       var self = this;
       fetch(file.href + "?raw").then(function(r){return r.text()}).then(function(txt) {
         self.previewContentBox.innerHTML = "";
-        self.previewContentBox.appendChild(el("pre", { className: "m-preview-text", textContent: txt }));
+        
+        var isMd = file.name.toLowerCase().endsWith(".md");
+        if (isMd && self.canWrite) {
+          // SPLIT PANE MARKDOWN EDITOR
+          self.previewContentBox.style.display = "flex";
+          self.previewContentBox.style.flexDirection = "column";
+          
+          var toolbar = el("div", { style: "padding:12px;background:var(--m-bg);border-bottom:1px solid var(--m-border);display:flex;justify-content:space-between;align-items:center" });
+          toolbar.appendChild(el("div", { textContent: "Markdown Split-Pane Editor", style: "font-weight:600;color:var(--m-primary)" }));
+          var saveBtn = el("button", { className: "m-btn-primary", textContent: "Save Changes" });
+          toolbar.appendChild(saveBtn);
+          self.previewContentBox.appendChild(toolbar);
+
+          var split = el("div", { style: "display:flex;flex:1;overflow:hidden" });
+          
+          var area = el("textarea", { spellcheck: "false", style: "flex:1;padding:16px;background:var(--m-bg);color:var(--m-text);border:none;border-right:1px solid var(--m-border);font-family:monospace;resize:none;font-size:14px;line-height:1.5" });
+          area.value = txt;
+          
+          var renderbox = el("div", { style: "flex:1;padding:16px 24px;overflow-y:auto;background:var(--m-bg);color:var(--m-text);line-height:1.6;font-family:sans-serif" });
+          var renderMd = function() {
+            var raw = area.value;
+            var html = raw.replace(/</g, "&lt;").replace(/>/g, "&gt;")
+              .replace(/^### (.*$)/gim, '<h3 style="margin-top:16px;margin-bottom:8px;font-weight:600">$1</h3>')
+              .replace(/^## (.*$)/gim, '<h2 style="margin-top:24px;margin-bottom:12px;font-weight:600;border-bottom:1px solid var(--m-border)">$1</h2>')
+              .replace(/^# (.*$)/gim, '<h1 style="margin-top:24px;margin-bottom:16px;font-weight:700;border-bottom:1px solid var(--m-border);padding-bottom:8px">$1</h1>')
+              .replace(/\*\*(.*?)\*\*/gim, '<b>$1</b>')
+              .replace(/\*(.*?)\*/gim, '<i>$1</i>')
+              .replace(/!\[(.*?)\]\((.*?)\)/gim, "<img alt='$1' src='$2' style='max-width:100%;border-radius:8px'>")
+              .replace(/\[(.*?)\]\((.*?)\)/gim, "<a href='$2' style='color:var(--m-primary)'>$1</a>")
+              .replace(/`(.*?)`/gim, "<code style='background:var(--m-bg-hover);padding:2px 4px;border-radius:4px;font-family:monospace'>$1</code>")
+              .replace(/\n\n/gim, '</p><p style="margin-bottom:16px">').replace(/\n/gim, '<br>');
+            renderbox.innerHTML = '<p>' + html + '</p>';
+          };
+          renderMd();
+          area.addEventListener("input", renderMd);
+          
+          saveBtn.onclick = function() {
+            saveBtn.textContent = "Saving...";
+            // Upload to same directory
+            var pdir = file.href.split('/').slice(0, -1).join('/') + '/';
+            var blob = new Blob([area.value], { type: "text/plain" });
+            var fd = new FormData();
+            fd.append("act", "bput");
+            fd.append("f", blob, file.name);
+            
+            var xhr = new XMLHttpRequest();
+            xhr.open("POST", pdir);
+            xhr.onload = function() {
+              if (xhr.status >= 200 && xhr.status < 400) { 
+                saveBtn.textContent = "Saved!"; 
+                setTimeout(function(){saveBtn.textContent="Save Changes";}, 2000); 
+              } else { 
+                alert("Error saving: " + xhr.statusText); 
+                saveBtn.textContent = "Save Changes"; 
+              }
+            };
+            xhr.send(fd);
+          };
+
+          split.appendChild(area);
+          split.appendChild(renderbox);
+          self.previewContentBox.appendChild(split);
+        } else {
+          self.previewContentBox.style.display = "block";
+          self.previewContentBox.appendChild(el("pre", { className: "m-preview-text", textContent: txt }));
+        }
       }).catch(function() {
         self.previewContentBox.innerHTML = "<div style='color:white;padding:24px'>Failed to load file</div>";
       });
     } else if (type === "media") {
-      var isAudio = ["mp3","wav","ogg","flac"].indexOf((file.ext||"").toLowerCase()) >= 0;
-      var tag = isAudio ? "audio" : "video";
-      var media = el(tag, { src: file.href + "?raw", controls: "true", className: "m-preview-media", autoplay: "true" });
+      var isAudio = ["mp3","wav","ogg","flac","m4a"].indexOf((file.ext||"").toLowerCase()) >= 0;
+      if (isAudio) {
+        this.previewModal.classList.remove("active");
+        this.playAudio(file);
+        return;
+      }
+      var media = el("video", { src: file.href + "?raw", controls: "true", className: "m-preview-media", autoplay: "true" });
       this.previewContentBox.appendChild(media);
       this.previewClose.onclick = function() {
         media.pause(); media.src = "";
         this.previewModal.classList.remove("active");
       }.bind(this);
     }
+  };
+
+  // ---- AUDIO PLAYER ----
+  ModernUI.prototype.buildAudioDock = function() {
+    if (this.audioDock) return;
+    var self = this;
+    this.audioDock = el("div", { className: "m-audio-dock" });
+    
+    // Info
+    this.audioInfo = el("div", { className: "m-audio-info" });
+    this.audioTitle = el("div", { className: "m-audio-title", textContent: "Loading..." });
+    this.audioArtist = el("div", { className: "m-audio-artist", textContent: "CopyParty Audio" });
+    this.audioInfo.appendChild(this.audioTitle);
+    this.audioInfo.appendChild(this.audioArtist);
+    this.audioDock.appendChild(this.audioInfo);
+
+    // Controls
+    var ctrls = el("div", { className: "m-audio-controls" });
+    var playBtn = el("button", { className: "m-audio-btn play-pause", innerHTML: SVG.play });
+    ctrls.appendChild(playBtn);
+    this.audioDock.appendChild(ctrls);
+
+    // Progress
+    var prog = el("div", { className: "m-audio-progress-container" });
+    this.audioTimeCur = el("div", { className: "m-audio-time", textContent: "0:00" });
+    this.audioScrub = el("div", { className: "m-audio-scrubber" });
+    this.audioScrubFill = el("div", { className: "m-audio-scrub-fill" });
+    this.audioScrub.appendChild(this.audioScrubFill);
+    this.audioTimeTot = el("div", { className: "m-audio-time", textContent: "0:00" });
+    prog.appendChild(this.audioTimeCur);
+    prog.appendChild(this.audioScrub);
+    prog.appendChild(this.audioTimeTot);
+    this.audioDock.appendChild(prog);
+
+    // Close
+    var closeBtn = el("button", { className: "m-audio-close", innerHTML: SVG.close });
+    this.audioDock.appendChild(closeBtn);
+
+    // Audio Element inside (hidden)
+    this.audioEl = el("audio", { src: "" });
+    this.audioDock.appendChild(this.audioEl);
+
+    document.body.appendChild(this.audioDock);
+
+    // Events
+    playBtn.onclick = function() {
+      if (self.audioEl.paused) { self.audioEl.play(); playBtn.innerHTML = SVG.pause; }
+      else { self.audioEl.pause(); playBtn.innerHTML = SVG.play; }
+    };
+    closeBtn.onclick = function() {
+      self.audioEl.pause();
+      self.audioDock.classList.remove("active");
+    };
+    this.audioEl.addEventListener('timeupdate', function() {
+      var pct = (self.audioEl.currentTime / self.audioEl.duration) * 100 || 0;
+      self.audioScrubFill.style.width = pct + "%";
+      self.audioTimeCur.textContent = self.formatTime(self.audioEl.currentTime);
+      if (self.audioEl.duration) self.audioTimeTot.textContent = self.formatTime(self.audioEl.duration);
+    });
+    this.audioEl.addEventListener('ended', function() {
+      playBtn.innerHTML = SVG.play;
+    });
+    this.audioScrub.onclick = function(e) {
+      if (!self.audioEl.duration) return;
+      var rect = self.audioScrub.getBoundingClientRect();
+      var pct = (e.clientX - rect.left) / rect.width;
+      self.audioEl.currentTime = Math.max(0, Math.min(1, pct)) * self.audioEl.duration;
+    };
+  };
+
+  ModernUI.prototype.formatTime = function(sec) {
+    if (isNaN(sec)) return "0:00";
+    var min = Math.floor(sec / 60);
+    var sc = Math.floor(sec % 60);
+    return min + ":" + (sc < 10 ? "0" : "") + sc;
+  };
+
+  ModernUI.prototype.playAudio = function(file) {
+    this.buildAudioDock();
+    this.audioTitle.textContent = file.name;
+    this.audioEl.src = file.href + "?raw";
+    this.audioEl.play();
+    this.audioDock.querySelector('.play-pause').innerHTML = SVG.pause;
+    this.audioDock.classList.add("active");
   };
 
   // ---- CONTEXT MENU ----
@@ -1104,7 +1325,26 @@
     copyItem.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"></path><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"></path></svg><span>Copy Link</span>';
     menu.appendChild(copyItem);
 
+    var shareItem = el("button", { className: "m-ctx-item", onclick: function() { self.showShareModal(file); self.hideContextMenu(); }});
+    shareItem.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="18" cy="5" r="3"></circle><circle cx="6" cy="12" r="3"></circle><circle cx="18" cy="19" r="3"></circle><line x1="8.59" y1="13.51" x2="15.42" y2="17.49"></line><line x1="15.41" y1="6.51" x2="8.59" y2="10.49"></line></svg><span>Share Menu</span>';
+    menu.appendChild(shareItem);
+
     if (this.canDelete) {
+      // Rename & Move
+      var renItem = el("button", {
+        className: "m-ctx-item",
+        onclick: function () { self.showRenameModal(file); self.hideContextMenu(); },
+      });
+      renItem.innerHTML = SVG.rename + "<span>Rename</span>";
+      menu.appendChild(renItem);
+
+      var moveItem = el("button", {
+        className: "m-ctx-item",
+        onclick: function () { self.showMoveModal(file); self.hideContextMenu(); },
+      });
+      moveItem.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="5 9 2 12 5 15"/><polyline points="19 9 22 12 19 15"/><line x1="2" y1="12" x2="22" y2="12"/></svg><span>Move</span>';
+      menu.appendChild(moveItem);
+
       menu.appendChild(el("div", { className: "m-ctx-divider" }));
       var delItem = el("button", {
         className: "m-ctx-item danger",
@@ -1172,10 +1412,81 @@
     this.currentModalAction = null;
   };
 
+  ModernUI.prototype.showRenameModal = function (file) {
+    this.currentModalAction = "rename";
+    this.currentModalTarget = file;
+    document.getElementById("m-modal-title").textContent = "Rename";
+    var input = document.getElementById("m-modal-input");
+    input.value = file.name;
+    input.placeholder = "New name";
+    document.getElementById("m-modal-confirm").textContent = "Rename";
+    document.getElementById("m-modal").classList.add("active");
+    setTimeout(function () { input.focus(); input.select(); }, 100);
+    var self = this;
+    input.onkeydown = function (e) { if (e.key === "Enter") self.confirmModal(); };
+  };
+
+  ModernUI.prototype.showMoveModal = function (file) {
+    this.currentModalAction = "move";
+    this.currentModalTarget = file;
+    document.getElementById("m-modal-title").textContent = "Move file to...";
+    var input = document.getElementById("m-modal-input");
+    input.value = "";
+    input.placeholder = "Folder path (e.g. '../photos')";
+    document.getElementById("m-modal-confirm").textContent = "Move";
+    document.getElementById("m-modal").classList.add("active");
+    setTimeout(function () { input.focus(); }, 100);
+    var self = this;
+    input.onkeydown = function (e) { if (e.key === "Enter") self.confirmModal(); };
+  };
+
+  ModernUI.prototype.showShareModal = function(file) {
+    var self = this;
+    if (!this.shareOverlay) {
+      this.shareOverlay = el("div", { className: "m-modal-overlay" });
+      this.shareOverlay.addEventListener("click", function (e) {
+        if (e.target === self.shareOverlay) self.shareOverlay.classList.remove("active");
+      });
+      document.body.appendChild(this.shareOverlay);
+    }
+    
+    var modal = el("div", { className: "m-modal", style:"text-align:center" });
+    modal.appendChild(el("h3", { className: "m-modal-title", textContent: "Share File" }));
+    
+    var linkVal = window.location.origin + file.href;
+    
+    var qr = el("img", { src: "https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=" + encodeURIComponent(linkVal), style:"margin: 20px auto; border-radius: 8px; border: 1px solid var(--m-border);" });
+    modal.appendChild(qr);
+    
+    var inputWrap = el("div", { style:"display:flex;gap:8px;margin-bottom:16px;" });
+    var input = el("input", { type:"text", value: linkVal, readOnly: true, style:"flex:1;padding:8px;border:1px solid var(--m-border);border-radius:4px;background:var(--m-bg);color:var(--m-text);" });
+    var copyBtn = el("button", { className: "m-btn-primary", textContent: "Copy" });
+    copyBtn.onclick = function() {
+      input.select(); document.execCommand("copy");
+      copyBtn.textContent = "Copied!";
+      setTimeout(function(){ copyBtn.textContent="Copy"; }, 2000);
+    };
+    inputWrap.appendChild(input); inputWrap.appendChild(copyBtn);
+    modal.appendChild(inputWrap);
+    
+    var closeBtn = el("button", { className: "m-btn-secondary", textContent: "Close", onclick: function() { self.shareOverlay.classList.remove("active"); } });
+    modal.appendChild(closeBtn);
+    
+    this.shareOverlay.innerHTML = "";
+    this.shareOverlay.appendChild(modal);
+    this.shareOverlay.classList.add("active");
+  };
+
   ModernUI.prototype.confirmModal = function () {
-    if (this.currentModalAction === "mkdir") {
-      var name = document.getElementById("m-modal-input").value.trim();
-      if (name) this.createFolder(name);
+    var val = document.getElementById("m-modal-input").value.trim();
+    if (val) {
+      if (this.currentModalAction === "mkdir") {
+        this.createFolder(val);
+      } else if (this.currentModalAction === "rename" && this.currentModalTarget) {
+        this.renameFile(this.currentModalTarget, val);
+      } else if (this.currentModalAction === "move" && this.currentModalTarget) {
+        this.moveFile(this.currentModalTarget, val);
+      }
     }
     this.closeModal();
   };
@@ -1305,6 +1616,40 @@
     }
 
     body.appendChild(acctSec);
+
+    // === Server Config Section (UI Only) ===
+    var srvSec = el("div", { className: "m-settings-section" });
+    srvSec.appendChild(el("div", { className: "m-settings-section-title", textContent: "Server Services" }));
+
+    var createServiceToggle = function(label, desc) {
+      var row = el("div", { className: "m-setting-row" });
+      var info = el("div");
+      info.appendChild(el("div", { className: "m-setting-label", textContent: label }));
+      info.appendChild(el("div", { className: "m-setting-desc", textContent: desc }));
+      row.appendChild(info);
+      var toggle = el("div", {
+        className: "m-switch",
+        onclick: function () {
+          this.classList.toggle("active");
+          alert("Note: To fully enable " + label + ", copyparty must be restarted with the CLI flag or config file.");
+        },
+      });
+      row.appendChild(toggle);
+      return row;
+    };
+
+    srvSec.appendChild(createServiceToggle("FTP Server", "--ftp 3921 (File Transfer)"));
+    srvSec.appendChild(createServiceToggle("SMB Server", "--smb 3945 (Windows Share)"));
+    srvSec.appendChild(createServiceToggle("WebDAV Server", "-e2d (HTTP File Mapping)"));
+
+    var configBtn = el("button", {
+      className: "m-settings-action-btn",
+      style: "margin-top: 12px; justify-content: center; background: var(--m-primary-light); color: var(--m-primary)",
+      onclick: function () { self.hideSettings(); self.showConfigModal(); },
+      textContent: "Open Config Builder",
+    });
+    srvSec.appendChild(configBtn);
+    body.appendChild(srvSec);
 
     // === UI Section ===
     var uiSec = el("div", { className: "m-settings-section" });
@@ -1494,6 +1839,68 @@
     setTimeout(function () { clearInterval(checkInterval); }, 300000);
   };
 
+  ModernUI.prototype.queueAction = function(file, message, executeFn) {
+    var self = this;
+    if (this.pendingAction) this.pendingAction.execute(false); // finish previous queue
+
+    // visual hide
+    var originalOpacity, originalEvents;
+    var el = file.el;
+    if (el) {
+      originalOpacity = el.style.opacity;
+      originalEvents = el.style.pointerEvents;
+      el.style.opacity = '0.3';
+      el.style.pointerEvents = 'none';
+      if (this.viewMode === "list") el.style.background = 'var(--m-danger-bg)';
+    }
+
+    if (!this.undoToast) {
+      this.undoToast = document.createElement("div");
+      this.undoToast.className = "m-undo-toast";
+      this.undoMsg = document.createElement("span");
+      this.undoMsg.className = "m-undo-msg";
+      this.undoBtn = document.createElement("button");
+      this.undoBtn.className = "m-undo-btn";
+      this.undoBtn.textContent = "Undo";
+      this.undoToast.appendChild(this.undoMsg);
+      this.undoToast.appendChild(this.undoBtn);
+      document.body.appendChild(this.undoToast);
+    }
+
+    this.undoMsg.textContent = message;
+    this.undoToast.classList.add("active");
+
+    var tm = setTimeout(function() {
+      if (self.pendingAction && self.pendingAction.tm === tm) {
+        self.pendingAction.execute(true);
+      }
+    }, 5000);
+
+    var cleanup = function() {
+      self.undoToast.classList.remove("active");
+      self.pendingAction = null;
+    };
+
+    this.undoBtn.onclick = function() {
+      clearTimeout(tm);
+      if (el) {
+        el.style.opacity = originalOpacity;
+        el.style.pointerEvents = originalEvents;
+        if (self.viewMode === "list") el.style.background = '';
+      }
+      cleanup();
+    };
+
+    this.pendingAction = {
+      tm: tm,
+      execute: function(reload) {
+        clearTimeout(tm);
+        cleanup();
+        executeFn(reload);
+      }
+    };
+  };
+
   ModernUI.prototype.createFolder = function (name) {
     var xhr = new XMLHttpRequest();
     xhr.open("POST", window.location.pathname + "?mkdir=" + encodeURIComponent(name));
@@ -1506,16 +1913,46 @@
     xhr.send("");
   };
 
+  ModernUI.prototype.renameFile = function (file, newName) {
+    if (!newName || newName === file.name) return;
+    this.queueAction(file, "Renamed '" + file.name + "'", function(reload) {
+      var pdir = file.href.split('/').slice(0, -1).join('/') + '/';
+      var xhr = new XMLHttpRequest();
+      xhr.open("POST", pdir + "?mv=" + encodeURIComponent(file.name));
+      xhr.setRequestHeader("Content-Type", "text/plain;charset=UTF-8");
+      if (reload) xhr.onload = function () {
+        if (xhr.status >= 200 && xhr.status < 400) window.location.reload();
+        else alert("Failed to rename: " + xhr.statusText);
+      };
+      xhr.send(newName);
+    });
+  };
+
+  ModernUI.prototype.moveFile = function (file, dest) {
+    if (!dest) return;
+    this.queueAction(file, "Moved '" + file.name + "'", function(reload) {
+      var pdir = file.href.split('/').slice(0, -1).join('/') + '/';
+      var xhr = new XMLHttpRequest();
+      xhr.open("POST", pdir + "?mv=" + encodeURIComponent(file.name));
+      xhr.setRequestHeader("Content-Type", "text/plain;charset=UTF-8");
+      if (reload) xhr.onload = function () {
+        if (xhr.status >= 200 && xhr.status < 400) window.location.reload();
+        else alert("Failed to move: " + xhr.statusText);
+      };
+      xhr.send(dest);
+    });
+  };
+
   ModernUI.prototype.deleteFile = function (file) {
-    if (!confirm('Delete "' + file.name + '"?')) return;
-    var xhr = new XMLHttpRequest();
-    xhr.open("POST", file.href + "?delete");
-    xhr.onload = function () {
-      if (xhr.status >= 200 && xhr.status < 400) window.location.reload();
-      else alert("Failed to delete: " + xhr.statusText);
-    };
-    xhr.onerror = function () { alert("Network error during delete"); };
-    xhr.send("");
+    this.queueAction(file, "Deleted '" + file.name + "'", function(reload) {
+      var xhr = new XMLHttpRequest();
+      xhr.open("POST", file.href + "?delete");
+      if (reload) xhr.onload = function () {
+        if (xhr.status >= 200 && xhr.status < 400) window.location.reload();
+        else alert("Failed to delete: " + xhr.statusText);
+      };
+      xhr.send("");
+    });
   };
 
   // ---- UI SWITCHING ----
@@ -1568,6 +2005,169 @@
     document.body.appendChild(btn);
   }
 
+  // ===== CONFIG BUILDER MODAL =====
+  ModernUI.prototype.buildConfigModal = function() {
+    var self = this;
+    this.configOverlay = el("div", { className: "m-modal-overlay m-config-modal" });
+    this.configOverlay.addEventListener("click", function (e) {
+      if (e.target === self.configOverlay) self.hideConfigModal();
+    });
+
+    var modal = el("div", { className: "m-modal" });
+    modal.appendChild(el("h3", { className: "m-modal-title", textContent: "CopyParty Config Builder" }));
+
+    var layout = el("div", { className: "m-cb-layout" });
+
+    // LEFT COLUMN: Forms
+    var forms = el("div", { className: "m-cb-section", style: "max-height: 60vh; overflow-y: auto; padding-right: 16px; align-content: flex-start" });
+
+    // Network
+    var netSec = el("div", { className: "m-cb-section", style: "border-bottom:1px solid var(--m-border); padding-bottom:12px;" });
+    netSec.appendChild(el("div", { className: "m-cb-title", textContent: "Network" }));
+    var g1 = el("div", { className: "m-cb-form-group" });
+    g1.innerHTML = '<label>Listen Port</label><input type="number" id="cb-port" value="3923">';
+    var g2 = el("div", { className: "m-cb-form-group" });
+    g2.innerHTML = '<label>Host / IP (0.0.0.0 for all)</label><input type="text" id="cb-host" value="0.0.0.0">';
+    netSec.appendChild(g1); netSec.appendChild(g2);
+    forms.appendChild(netSec);
+
+    // Services
+    var srvSec = el("div", { className: "m-cb-section", style: "border-bottom:1px solid var(--m-border); padding-bottom:12px;" });
+    srvSec.appendChild(el("div", { className: "m-cb-title", textContent: "Services" }));
+    var g3 = el("div", { className: "m-cb-form-group", style: "flex-direction:row;align-items:center;gap:8px;" });
+    g3.innerHTML = '<input type="checkbox" id="cb-ftp"><label for="cb-ftp">Enable FTP Port 3921</label>';
+    var g4 = el("div", { className: "m-cb-form-group", style: "flex-direction:row;align-items:center;gap:8px;" });
+    g4.innerHTML = '<input type="checkbox" id="cb-smb"><label for="cb-smb">Enable SMB Port 3945</label>';
+    var g5 = el("div", { className: "m-cb-form-group", style: "flex-direction:row;align-items:center;gap:8px;" });
+    g5.innerHTML = '<input type="checkbox" id="cb-webdav"><label for="cb-webdav">Enable WebDAV mapping</label>';
+    srvSec.appendChild(g3); srvSec.appendChild(g4); srvSec.appendChild(g5);
+    forms.appendChild(srvSec);
+
+    // Accounts
+    var acctSec = el("div", { className: "m-cb-section", style: "border-bottom:1px solid var(--m-border); padding-bottom:12px;" });
+    acctSec.appendChild(el("div", { className: "m-cb-title", textContent: "Accounts" }));
+    var gAcct = el("div", { className: "m-cb-form-group" });
+    gAcct.innerHTML = '<label>Default Admin Account (user:pass)</label><input type="text" id="cb-acct" placeholder="admin:mysecretpassword">';
+    acctSec.appendChild(gAcct);
+    forms.appendChild(acctSec);
+
+    // Indexing
+    var idxSec = el("div", { className: "m-cb-section", style: "border-bottom:1px solid var(--m-border); padding-bottom:12px;" });
+    idxSec.appendChild(el("div", { className: "m-cb-title", textContent: "Indexing & Performance" }));
+    var gIdx1 = el("div", { className: "m-cb-form-group", style: "flex-direction:row;align-items:center;gap:8px;" });
+    gIdx1.innerHTML = '<input type="checkbox" id="cb-e2dsa" checked><label for="cb-e2dsa">Enable general file indexing (-e2dsa)</label>';
+    var gIdx2 = el("div", { className: "m-cb-form-group", style: "flex-direction:row;align-items:center;gap:8px;" });
+    gIdx2.innerHTML = '<input type="checkbox" id="cb-e2ts"><label for="cb-e2ts">Enable audio metadata indexing (-e2ts)</label>';
+    var gIdx3 = el("div", { className: "m-cb-form-group", style: "flex-direction:row;align-items:center;gap:8px;" });
+    gIdx3.innerHTML = '<input type="checkbox" id="cb-nothumb"><label for="cb-nothumb">Disable all thumbnail generation (--no-thumb)</label>';
+    idxSec.appendChild(gIdx1); idxSec.appendChild(gIdx2); idxSec.appendChild(gIdx3);
+    forms.appendChild(idxSec);
+
+    // Security
+    var secSec = el("div", { className: "m-cb-section", style: "border-bottom:1px solid var(--m-border); padding-bottom:12px;" });
+    secSec.appendChild(el("div", { className: "m-cb-title", textContent: "Security & Proxy" }));
+    var gSec1 = el("div", { className: "m-cb-form-group", style: "flex-direction:row;align-items:center;gap:8px;" });
+    gSec1.innerHTML = '<input type="checkbox" id="cb-cf"><label for="cb-cf">Trust Cloudflare IPs (--xff-hdr)</label>';
+    var gSec2 = el("div", { className: "m-cb-form-group" });
+    gSec2.innerHTML = '<label>Brute-force Ban Limits (failures/seconds)</label><input type="text" id="cb-ban" placeholder="9/3600">';
+    secSec.appendChild(gSec1); secSec.appendChild(gSec2);
+    forms.appendChild(secSec);
+
+    // Volume
+    var volSec = el("div", { className: "m-cb-section" });
+    volSec.appendChild(el("div", { className: "m-cb-title", textContent: "Default Volume" }));
+    var g6 = el("div", { className: "m-cb-form-group" });
+    g6.innerHTML = '<label>Local Directory Path</label><input type="text" id="cb-vol-src" value="./" placeholder="/var/www/data">';
+    var g7 = el("div", { className: "m-cb-form-group" });
+    g7.innerHTML = '<label>Web URL Mount Point</label><input type="text" id="cb-vol-dst" value="/">';
+    var g8 = el("div", { className: "m-cb-form-group" });
+    g8.innerHTML = '<label>Permissions</label><select id="cb-vol-acc" style="padding:8px;border:1px solid var(--m-border);border-radius:4px;background:var(--m-bg);color:var(--m-text);"><option value="r">Read Only (r)</option><option value="w">Upload Only (w)</option><option value="rw">Read & Write (rw)</option><option value="rmd">Read, Move, Delete (rmd)</option><option value="rmda">Full Admin (rmda)</option></select>';
+    var g9 = el("div", { className: "m-cb-form-group", style: "flex-direction:row;align-items:center;gap:8px;margin-top:8px;" });
+    g9.innerHTML = '<input type="checkbox" id="cb-vol-dthumb"><label for="cb-vol-dthumb">Disable thumbnails on this volume (c,dthumb)</label>';
+    volSec.appendChild(g6); volSec.appendChild(g7); volSec.appendChild(g8); volSec.appendChild(g9);
+    forms.appendChild(volSec);
+
+    layout.appendChild(forms);
+
+    // RIGHT COLUMN: Output
+    var outSec = el("div", { className: "m-cb-section" });
+    outSec.appendChild(el("div", { className: "m-cb-title", textContent: "Generated copyparty.conf" }));
+    var outArea = el("textarea", { className: "m-cb-output", id: "cb-output-area", readOnly: true });
+    outSec.appendChild(outArea);
+
+    layout.appendChild(outSec);
+    modal.appendChild(layout);
+
+    // Actions
+    var actions = el("div", { className: "m-modal-actions", style: "margin-top:10px;" });
+    actions.appendChild(el("button", { className: "m-btn-secondary", textContent: "Close", onclick: function () { self.hideConfigModal(); } }));
+    actions.appendChild(el("button", { className: "m-btn-primary", textContent: "Copy & Download", onclick: function () {
+      navigator.clipboard.writeText(outArea.value);
+      var blob = new Blob([outArea.value], {type: "text/plain"});
+      var a = document.createElement("a");
+      a.href = URL.createObjectURL(blob);
+      a.download = "copyparty.conf";
+      a.click();
+    } }));
+    modal.appendChild(actions);
+
+    this.configOverlay.appendChild(modal);
+
+    // Update logic
+    var inputs = ["cb-port","cb-host","cb-ftp","cb-smb","cb-webdav","cb-vol-src","cb-vol-dst","cb-vol-acc","cb-acct","cb-e2dsa","cb-e2ts","cb-nothumb","cb-cf","cb-ban","cb-vol-dthumb"];
+    var updateYaml = function() {
+      var y = "[global]\n";
+      y += "p: " + (document.getElementById("cb-port").value || 3923) + "\n";
+      y += "i: " + (document.getElementById("cb-host").value || "0.0.0.0") + "\n";
+      if (document.getElementById("cb-ftp").checked) y += "ftp: 3921\n";
+      if (document.getElementById("cb-smb").checked) y += "smb: 1\n";
+      if (document.getElementById("cb-webdav").checked) y += "e2d: 1\n";
+      
+      var acct = document.getElementById("cb-acct").value;
+      if (acct) y += "a: " + acct + "\n";
+      
+      if (document.getElementById("cb-e2dsa").checked) y += "e2dsa: 1\n";
+      if (document.getElementById("cb-e2ts").checked) y += "e2ts: 1\n";
+      if (document.getElementById("cb-nothumb").checked) y += "no-thumb: 1\n";
+      
+      if (document.getElementById("cb-cf").checked) y += "xff-hdr: cf-connecting-ip\n";
+      var ban = document.getElementById("cb-ban").value;
+      if (ban) y += "ban-pw: " + ban + "\n";
+      
+      y += "\n[/" + document.getElementById("cb-vol-dst").value.replace(/^\/+/,'') + "]\n";
+      y += document.getElementById("cb-vol-src").value + "\n";
+      
+      var vf = [];
+      var acc = document.getElementById("cb-vol-acc").value;
+      if (document.getElementById("cb-vol-dthumb").checked) vf.push("c,dthumb");
+      
+      var flags = vf.length > 0 ? "  " + vf.join("  ") : "";
+      var accAuth = acct ? acct.split(':')[0] : "A"; // Use 'A' (anonymous) if no acct defined
+      y += "accs:  " + accAuth + ":" + acc + flags + "\n";
+      
+      outArea.value = y;
+    };
+
+    setTimeout(function() {
+      for (var i = 0; i < inputs.length; i++) {
+        var el = document.getElementById(inputs[i]);
+        if (el) el.addEventListener("input", updateYaml);
+        if (el) el.addEventListener("change", updateYaml);
+      }
+      updateYaml();
+    }, 100);
+
+    return this.configOverlay;
+  };
+
+  ModernUI.prototype.showConfigModal = function() {
+    if (this.configOverlay) this.configOverlay.classList.add("active");
+  };
+
+  ModernUI.prototype.hideConfigModal = function() {
+    if (this.configOverlay) this.configOverlay.classList.remove("active");
+  };
+
   // ===== DROP ZONE =====
   function setupDragDrop() {
     var content = document.querySelector(".m-content");
@@ -1611,6 +2211,57 @@
     var ui = new ModernUI();
     ui.init();
     setTimeout(function () { setupDragDrop(); }, 200);
+
+    // Global keyboard navigation
+    document.addEventListener("keydown", function(e) {
+      if (document.activeElement && (document.activeElement.tagName === "INPUT" || document.activeElement.tagName === "TEXTAREA")) return;
+      var focused = document.activeElement;
+      if (!focused || (!focused.classList.contains("m-file-card") && !focused.classList.contains("m-file-row"))) {
+        // If nothing is focused and user presses down, focus first item
+        if (e.key === "ArrowDown") {
+          var first = document.querySelector(".m-file-card, .m-file-row");
+          if (first) { e.preventDefault(); first.focus(); }
+        }
+        return;
+      }
+
+      var isGrid = focused.classList.contains("m-file-card");
+      var items = document.querySelectorAll(isGrid ? ".m-file-card" : ".m-file-row");
+      var idx = Array.prototype.indexOf.call(items, focused);
+      if (idx < 0) return;
+
+      var newIdx = idx;
+      if (e.key === "ArrowDown") {
+        if (isGrid) {
+          var cols = 1;
+          for (var i = 1; i < items.length; i++) {
+            if (items[i].offsetTop > items[0].offsetTop) { cols = i; break; }
+          }
+          newIdx = idx + cols;
+        } else {
+          newIdx = idx + 1;
+        }
+      }
+      else if (e.key === "ArrowUp") {
+        if (isGrid) {
+          var cols = 1;
+          for (var i = 1; i < items.length; i++) {
+            if (items[i].offsetTop > items[0].offsetTop) { cols = i; break; }
+          }
+          newIdx = idx - cols;
+        } else {
+          newIdx = idx - 1;
+        }
+      }
+      else if (e.key === "ArrowRight" && isGrid) newIdx = idx + 1;
+      else if (e.key === "ArrowLeft" && isGrid) newIdx = idx - 1;
+      else return;
+
+      if (newIdx >= 0 && newIdx < items.length) {
+        e.preventDefault();
+        items[newIdx].focus();
+      }
+    });
   }
 
   if (document.readyState === "complete") {
